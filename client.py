@@ -7,6 +7,10 @@ from numpy import pi, cos, sin, convolve
 from scipy.fftpack import fft, ifft, fftshift
 from scipy.signal import butter, sosfiltfilt
 
+AMP_THRESHOLD = 150
+NOISE_THRESHOLD = 15
+SAMPLES_FOR_AVERAGE = 3
+
 MIC_1_SR = 1580
 MIC_2_SR = 1690
 
@@ -38,12 +42,6 @@ def on_connect(client, userdata, flags, rc):
     print("Subscribed to mic")
 
 
-maxi = 0
-
-
-pos = 0
-
-
 def graph_signal(y):
     topy = max([MAXY, max(y)])
     boty = min([MINY, min(y)])
@@ -72,9 +70,9 @@ def graph_fft(frequencies):
 
 def remove_hum(data):
     fft_data = fft(data)
-    fft_data[fft_data < 200] = 0
+    fft_data[fft_data < THRESHOLD] = 0
     filt_1 = np.ones_like(fft_data)
-    filt_1[0:15] = 0
+    filt_1[0:NOISE_THRESHOLD] = 0
     data_filt = ifft(fft_data*filt_1)
     return np.real(data_filt)
 
@@ -83,8 +81,11 @@ def max_freq(frequencies, sampling_rate):
     return int(np.argmax(frequencies)/(1000/sampling_rate))
 
 
-def is_same_freq(freq_1, freq_2):
-    return (freq_1*0.9 <= freq_2 <= freq_1*1.1) or (freq_2*0.9 <= freq_1 <= freq_2*1.1)
+def is_same_freq(freq_1, freq_2, th=10):
+    th = th/100
+    low = 1 - th
+    high = 1 + th
+    return (freq_1*low <= freq_2 <= freq_1*high) or (freq_2*low <= freq_1 <= freq_2*high)
 
 
 def remove_outliers(data):
@@ -123,7 +124,7 @@ def on_message(client, userdata, msg):
 
         print("Mic {}: ".format("1" if is_mic_1 else "2"), end=" ")
 
-        if len(remove_outliers(freqs)) > 3:
+        if len(remove_outliers(freqs)) > SAMPLES_FOR_AVERAGE:
             print("Average frequency: ", get_average(freqs))
             if is_mic_1:
                 MIC_1_FREQS = []
