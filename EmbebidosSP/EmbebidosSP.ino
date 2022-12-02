@@ -1,16 +1,16 @@
 
 #include <ESP8266WiFi.h> //Whe using ESP8266
 #include <PubSubClient.h>
+#include <arduinoFFT.h>
 
 #define MIC A0
-#define SAMPLES 12500
 
 // Wifi security
-const char *ssid = "MotoEPC";
-const char *password = "57142857";
+const char *ssid = "INFINITUM3DB3_2.4";
+const char *password = "Dragon2075";
 
 // MQTT Broker IP address
-const char *mqtt_server = "192.168.135.36";
+const char *mqtt_server = "192.168.1.141";
 // const char* mqtt_server = "10.25.18.8";
 
 WiFiClient espClient;
@@ -18,16 +18,15 @@ PubSubClient client(espClient);
 
 long start = 0;
 
-unsigned int counter = 0;
+uint16_t counter = 0;
 
 // LED Pin
 const int ledPin = 2;
 
 uint16_t adc;
-uint32_t payload;
+uint16_t samples;
 
-uint8_t position = 0;
-uint32_t messages[SAMPLES];
+uint16_t data[5000];
 
 void setup()
 {
@@ -92,33 +91,25 @@ void loop()
 
   adc = analogRead(MIC);
 
-  payload |= (adc & 0x3FF) << position * 10;
+  counter++;
 
-  if (counter == SAMPLES)
+  if (millis() - start > 1000)
   {
-    Serial.print("Reading: ");
-    Serial.println((millis() - start) / 1000);
-    start = millis();
-    for (int i = 0; i < SAMPLES; i++)
-    {
-      client.publish("esp32/Mic", "test", 4);
-    }
 
-    Serial.print("Publishing: ");
-    Serial.println((millis() - start) / 1000);
+    Serial.println((float)(millis() - start) / 1000);
+    Serial.println(counter);
+    counter |= 0x8000;
+    client.beginPublish("mic", 2, false);
+    client.write((uint8_t *)&counter, 2);
+    client.endPublish();
     start = millis();
-
     counter = 0;
-  }
-
-  if (position == 2)
-  {
-    messages[counter++] = payload;
-    payload = 0;
-    position = 0;
   }
   else
   {
-    position++;
+
+    client.beginPublish("mic", 2, false);
+    client.write((uint8_t *)&adc, 2);
+    client.endPublish();
   }
 }
