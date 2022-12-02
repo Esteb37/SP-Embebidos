@@ -5,6 +5,10 @@
 
 #define MIC A0
 
+#define NODE_FLAG 0x4000
+
+uint16_t END_FLAG = 0x8000 | NODE_FLAG;
+
 // Wifi security
 const char *ssid = "INFINITUM3DB3_2.4";
 const char *password = "Dragon2075";
@@ -81,8 +85,6 @@ void reconnect()
   }
 }
 
-uint16_t flag = 0x8000;
-
 void loop()
 {
   if (!client.connected())
@@ -99,7 +101,7 @@ void loop()
   {
     Serial.println("Publishing");
     client.beginPublish("mic", 2, false);
-    client.write((uint8_t *)&flag, 2);
+    client.write((uint8_t *)&END_FLAG, 2);
     client.endPublish();
     start = millis();
     counter = 0;
@@ -107,6 +109,7 @@ void loop()
   else
   {
 
+    adc |= NODE_FLAG;
     client.beginPublish("mic", 2, false);
     client.write((uint8_t *)&adc, 2);
     client.endPublish();

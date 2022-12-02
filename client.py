@@ -7,16 +7,23 @@ from numpy import pi, cos, sin, convolve
 from scipy.fftpack import fft, ifft, fftshift
 from scipy.signal import butter, sosfiltfilt
 
-start = time.time()
-count = 0
+MIC_1_SR = 1580
+MIC_2_SR = 1690
+
+
+MIC_1_Y = []
+MIC_2_Y = []
+
+MIC_1_FREQS = []
+MIC_2_FREQS = []
+
+"""
 MINY = 100
 MAXY = 130
-
-y = []
-
-"""fig_signal = plt.figure()
+fig_signal = plt.figure()
 ax_signal = fig_signal.add_subplot(1, 1, 1)
-signal, = ax_signal.plot([], [], 'r')"""
+signal, = ax_signal.plot([], [], 'r')
+"""
 
 fig_fft = plt.figure()
 ax_fft = fig_fft.add_subplot(1, 1, 1)
@@ -54,7 +61,7 @@ def get_fft(data):
 
 
 def graph_fft(frequencies):
-    topy = max([MAXY, max(frequencies)])
+    topy = max(frequencies)
     ax_fft.set_ylim([0, topy*1.2])
     signal_fft.set_ydata(fftshift(frequencies))
     signal_fft.set_xdata(np.arange(-len(frequencies)//2, len(frequencies)//2))
@@ -72,27 +79,63 @@ def remove_hum(data):
     return np.real(data_filt)
 
 
-def max_freq(frequencies):
-    return int(np.argmax(frequencies)/(1.75))
+def max_freq(frequencies, sampling_rate):
+    return int(np.argmax(frequencies)/(1000/sampling_rate))
 
 
 def is_same_freq(freq_1, freq_2):
     return (freq_1*0.9 <= freq_2 <= freq_1*1.1) or (freq_2*0.9 <= freq_1 <= freq_2*1.1)
 
 
+def remove_outliers(data):
+    data = np.array(data)
+    mean = np.mean(data)
+    std = np.std(data)
+    return data[np.abs(data - mean) < 2*std]
+
+
+def get_average(freqs):
+    return np.mean(remove_outliers(freqs))
+
+
 def on_message(client, userdata, msg):
-    global y
+    global MIC_1_Y, MIC_2_Y, MIC_1_FREQS, MIC_2_FREQS
 
     payload = int.from_bytes(msg.payload, byteorder="little")
 
-    if payload & 0x8000:
+    is_mic_1 = payload >> 14 & 1
+    finished_flag = payload >> 15 & 1
+
+    y = MIC_1_Y if is_mic_1 else MIC_2_Y
+    freqs = MIC_1_FREQS if is_mic_1 else MIC_2_FREQS
+    payload &= 0x3FF
+
+    if finished_flag:
+
         clean_data = remove_hum(y)
+
         frequencies = get_fft(clean_data)
         # graph_fft(frequencies)
-        freq = max_freq(frequencies)
-        print(freq, is_same_freq(freq, 2200))
+        freq = max_freq(frequencies, MIC_1_SR if is_mic_1 else MIC_2_SR)
 
-        y = []
+        if (freq > 0):
+            freqs.append(freq)
+
+        print("Mic {}: ".format("1" if is_mic_1 else "2"), end=" ")
+
+        if len(remove_outliers(freqs)) > 3:
+            print("Average frequency: ", get_average(freqs))
+            if is_mic_1:
+                MIC_1_FREQS = []
+            else:
+                MIC_2_FREQS = []
+        else:
+            print(freq)
+
+        if is_mic_1:
+            MIC_1_Y = []
+        else:
+            MIC_2_Y = []
 
     else:
         y.append(payload)
