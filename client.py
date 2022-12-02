@@ -1,19 +1,18 @@
+from scipy.signal import butter, sosfiltfilt
+from scipy.fftpack import fft, ifft, fftshift
+from numpy import pi, cos, sin, convolve
 import paho.mqtt.client as mqtt
 import matplotlib.pyplot as plt
 import time
 import numpy as np
 
-from numpy import pi, cos, sin, convolve
-from scipy.fftpack import fft, ifft, fftshift
-from scipy.signal import butter, sosfiltfilt
-
-AMP_THRESHOLD = 150
+AMP_THRESHOLD = 100
 NOISE_THRESHOLD = 15
 SAMPLES_FOR_AVERAGE = 3
 
 
 NAMES = ["Node 1", "Node 2", "Rasp"]
-SRS = [1580, 1690, 1000]
+SRS = [4200, 4200, 23800]
 YS = [[], [], []]
 FREQS = [[], [], []]
 
@@ -38,8 +37,14 @@ def on_connect(client, userdata, flags, rc):
     print("Connected with result code "+str(rc))
     # Subscribing in on_connect() means that if we lose the connection and
     # reconnect then subscriptions will be renewed.
-    client.subscribe("mic")
-    print("Subscribed to mic")
+    client.subscribe("NODE_1")
+    print("Subscribed to NODE_1")
+
+    client.subscribe("NODE_2")
+    print("Subscribed to NODE_2")
+
+    client.subscribe("RASP")
+    print("Subscribed to RASP")
 
 
 def graph_signal(y):
@@ -70,7 +75,7 @@ def graph_fft(frequencies):
 
 def remove_hum(data):
     fft_data = fft(data)
-    fft_data[fft_data < THRESHOLD] = 0
+    fft_data[fft_data < AMP_THRESHOLD] = 0
     filt_1 = np.ones_like(fft_data)
     filt_1[0:NOISE_THRESHOLD] = 0
     data_filt = ifft(fft_data*filt_1)
@@ -81,7 +86,7 @@ def max_freq(frequencies, sampling_rate):
     return int(np.argmax(frequencies)/(1000/sampling_rate))
 
 
-def is_same_freq(freq_1, freq_2, th=10):
+def is_same_freq(freq_1, freq_2, th=20):
     th = th/100
     low = 1 - th
     high = 1 + th
@@ -100,13 +105,21 @@ def get_average(freqs):
 
 
 def on_message(client, userdata, msg):
-    global YS, FREQS, CONTROL_FREQ, COMPARE_FREQ
+    global YS, FREQS, CONTROL_FREQ, COMPARE_FREQ, RASP_FREQ, NODE_1_FREQ, NODE_2_FREQ
 
-    payload = int.from_bytes(msg.payload, byteorder="little")
+    payload = 0
 
-    finished_flag = payload >> 15 & 1
-    is_mic_1 = payload >> 14 & 1
-    is_rasp = payload >> 13 & 1
+    if(msg.topic == "RASP"):
+        payload = int(msg.payload.decode("utf-8"))
+    else:
+        payload = int.from_bytes(msg.payload, byteorder="little")
+
+    finished_flag = payload & 0x8000
+
+    is_mic_1 = msg.topic == "NODE_1"
+
+    is_rasp = msg.topic == "RASP"
+
     payload &= 0x3FF
 
     CURRENT_MIC = 2 if is_rasp else (0 if is_mic_1 else 1)
@@ -130,7 +143,7 @@ def on_message(client, userdata, msg):
 
         if len(remove_outliers(freqs)) > SAMPLES_FOR_AVERAGE:
             avg = get_average(freqs)
-            print("Average frequency: ", avg)
+            print("Average frequency {}: {}".format(name, avg))
 
             if CURRENT_MIC == 2:
                 RASP_FREQ = avg
@@ -143,22 +156,19 @@ def on_message(client, userdata, msg):
                         NODE_2_FREQ = avg
 
                     if is_same_freq(RASP_FREQ, NODE_1_FREQ):
-                        print("Went right")
+                        print("\n\n\n\n\n\nWent right\n\n\n\n\n\n")
                         RASP_FREQ = 0
 
                     elif is_same_freq(RASP_FREQ, NODE_2_FREQ):
-                        print("Went left")
+                        print("\n\n\n\n\n\nWent left\n\n\n\n\n\n")
                         RASP_FREQ = 0
                     else:
-                        print("Weird")
+                        print("\n\n\n\n\n\nWeird\n\n\n\n\n\n")
 
                     NODE_1_FREQ = 0
                     NODE_2_FREQ = 0
 
             freqs.clear()
-
-        else:
-            print(freq)
 
         y.clear()
 
