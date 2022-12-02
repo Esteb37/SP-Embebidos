@@ -11,15 +11,15 @@ AMP_THRESHOLD = 150
 NOISE_THRESHOLD = 15
 SAMPLES_FOR_AVERAGE = 3
 
-MIC_1_SR = 1580
-MIC_2_SR = 1690
 
+NAMES = ["Node 1", "Node 2", "Rasp"]
+SRS = [1580, 1690, 1000]
+YS = [[], [], []]
+FREQS = [[], [], []]
 
-MIC_1_Y = []
-MIC_2_Y = []
-
-MIC_1_FREQS = []
-MIC_2_FREQS = []
+NODE_1_FREQ = 0
+NODE_2_FREQ = 0
+RASP_FREQ = 0
 
 """
 MINY = 100
@@ -100,16 +100,20 @@ def get_average(freqs):
 
 
 def on_message(client, userdata, msg):
-    global MIC_1_Y, MIC_2_Y, MIC_1_FREQS, MIC_2_FREQS
+    global YS, FREQS, CONTROL_FREQ, COMPARE_FREQ
 
     payload = int.from_bytes(msg.payload, byteorder="little")
 
-    is_mic_1 = payload >> 14 & 1
     finished_flag = payload >> 15 & 1
-
-    y = MIC_1_Y if is_mic_1 else MIC_2_Y
-    freqs = MIC_1_FREQS if is_mic_1 else MIC_2_FREQS
+    is_mic_1 = payload >> 14 & 1
+    is_rasp = payload >> 13 & 1
     payload &= 0x3FF
+
+    CURRENT_MIC = 2 if is_rasp else (0 if is_mic_1 else 1)
+    y = YS[CURRENT_MIC]
+    freqs = FREQS[CURRENT_MIC]
+    sample_rate = SRS[CURRENT_MIC]
+    name = NAMES[CURRENT_MIC]
 
     if finished_flag:
 
@@ -117,26 +121,46 @@ def on_message(client, userdata, msg):
 
         frequencies = get_fft(clean_data)
         # graph_fft(frequencies)
-        freq = max_freq(frequencies, MIC_1_SR if is_mic_1 else MIC_2_SR)
+        freq = max_freq(frequencies, sample_rate)
 
         if (freq > 0):
             freqs.append(freq)
 
-        print("Mic {}: ".format("1" if is_mic_1 else "2"), end=" ")
+        print("{}: ".format(name), freq)
 
         if len(remove_outliers(freqs)) > SAMPLES_FOR_AVERAGE:
-            print("Average frequency: ", get_average(freqs))
-            if is_mic_1:
-                MIC_1_FREQS = []
+            avg = get_average(freqs)
+            print("Average frequency: ", avg)
+
+            if CURRENT_MIC == 2:
+                RASP_FREQ = avg
             else:
-                MIC_2_FREQS = []
+                if RASP_FREQ > 0:
+
+                    if CURRENT_MIC == 0:
+                        NODE_1_FREQ = avg
+                    else:
+                        NODE_2_FREQ = avg
+
+                    if is_same_freq(RASP_FREQ, NODE_1_FREQ):
+                        print("Went right")
+                        RASP_FREQ = 0
+
+                    elif is_same_freq(RASP_FREQ, NODE_2_FREQ):
+                        print("Went left")
+                        RASP_FREQ = 0
+                    else:
+                        print("Weird")
+
+                    NODE_1_FREQ = 0
+                    NODE_2_FREQ = 0
+
+            freqs.clear()
+
         else:
             print(freq)
 
-        if is_mic_1:
-            MIC_1_Y = []
-        else:
-            MIC_2_Y = []
+        y.clear()
 
     else:
         y.append(payload)
