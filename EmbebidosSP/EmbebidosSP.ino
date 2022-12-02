@@ -81,6 +81,8 @@ void reconnect()
   }
 }
 
+uint16_t flag = 0x8000;
+
 void loop()
 {
   if (!client.connected())
@@ -95,12 +97,9 @@ void loop()
 
   if (millis() - start > 1000)
   {
-
-    Serial.println((float)(millis() - start) / 1000);
-    Serial.println(counter);
-    counter |= 0x8000;
+    Serial.println("Publishing");
     client.beginPublish("mic", 2, false);
-    client.write((uint8_t *)&counter, 2);
+    client.write((uint8_t *)&flag, 2);
     client.endPublish();
     start = millis();
     counter = 0;

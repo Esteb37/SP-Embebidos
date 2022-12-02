@@ -1,5 +1,4 @@
 import paho.mqtt.client as mqtt
-
 import matplotlib.pyplot as plt
 import time
 import numpy as np
@@ -38,12 +37,6 @@ maxi = 0
 pos = 0
 
 
-def get_max_frequency(frequencies, samples):
-    peak = np.argmax(frequencies)
-    freq = peak*sample_rate/len(frequencies)
-    return freq
-
-
 def graph_signal(y):
     topy = max([MAXY, max(y)])
     boty = min([MINY, min(y)])
@@ -72,11 +65,19 @@ def graph_fft(frequencies):
 
 def remove_hum(data):
     fft_data = fft(data)
-    fft_data[fft_data < 100] = 0
+    fft_data[fft_data < 200] = 0
     filt_1 = np.ones_like(fft_data)
     filt_1[0:15] = 0
     data_filt = ifft(fft_data*filt_1)
     return np.real(data_filt)
+
+
+def max_freq(frequencies):
+    return int(np.argmax(frequencies)/(1.75))
+
+
+def is_same_freq(freq_1, freq_2):
+    return (freq_1*0.9 <= freq_2 <= freq_1*1.1) or (freq_2*0.9 <= freq_1 <= freq_2*1.1)
 
 
 def on_message(client, userdata, msg):
@@ -85,13 +86,12 @@ def on_message(client, userdata, msg):
     payload = int.from_bytes(msg.payload, byteorder="little")
 
     if payload & 0x8000:
-        samples = payload & 0x7FFF
-        print("Samples", samples)
-        if (samples > 0):
-            clean_data = remove_hum(y)
-            frequencies = get_fft(clean_data)
-            graph_fft(frequencies)
-            print(get_max_frequency(frequencies, samples))
+        clean_data = remove_hum(y)
+        frequencies = get_fft(clean_data)
+        # graph_fft(frequencies)
+        freq = max_freq(frequencies)
+        print(freq, is_same_freq(freq, 2200))
+
         y = []
 
     else:
