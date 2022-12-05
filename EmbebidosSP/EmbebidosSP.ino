@@ -4,39 +4,29 @@
 
 #define MIC A0
 
-#define NODE_FLAG 0x0000
-
 const char *CLIENT_NAME = "NODE_2";
 
-const char AVG_FREQ = NODE_FLAG == 0x4000 ? 64 : 65;
+const uint16_t END_FLAG = 0x8000;
 
-uint16_t END_FLAG = 0x8000 | NODE_FLAG;
+uint8_t message_id = 0;
+
+uint16_t payload = 0;
 
 // Wifi security
-const char *ssid = "Hilda";
-const char *password = "hildab04";
+const char *ssid = "INFINITUM3DB3_2.4";
+const char *password = "Dragon2075";
 
 // MQTT Broker IP address
-// const char *mqtt_server = "192.168.135.36";
-const char *mqtt_server = "172.20.10.2";
-// const char* mqtt_server = "10.25.18.8";
+const char *mqtt_server = "192.168.1.141";
 
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-long start = 0;
+uint64_t start = 0;
 
-long elapsed = 0;
+uint64_t elapsed = 0;
 
 uint16_t counter = 0;
-
-// LED Pin
-const int ledPin = 2;
-
-uint16_t adc;
-uint16_t samples;
-
-uint16_t data[5000];
 
 void setup()
 {
@@ -91,33 +81,33 @@ void reconnect()
   }
 }
 
+uint64_t micavg = 0;
+
 void loop()
 {
+
   if (!client.connected())
   {
     reconnect();
   }
   client.loop();
 
-  adc = analogRead(MIC);
-
-  counter++;
-
   if (millis() - start > 1000)
   {
-    Serial.println("Publishing");
+    payload = (millis() - start) | END_FLAG;
     client.beginPublish(CLIENT_NAME, 2, false);
-    client.write((uint8_t *)&END_FLAG, 2);
+    client.write((uint8_t *)&payload, 2);
     client.endPublish();
     start = millis();
     counter = 0;
   }
   else
   {
-
-    adc |= NODE_FLAG;
+    payload = analogRead(MIC);
     client.beginPublish(CLIENT_NAME, 2, false);
-    client.write((uint8_t *)&adc, 2);
+    client.write((uint8_t *)&payload, 2);
     client.endPublish();
   }
+  counter++;
+  delayMicroseconds(150);
 }

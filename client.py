@@ -12,7 +12,7 @@ SAMPLES_FOR_AVERAGE = 3
 
 
 NAMES = ["Node 1", "Node 2", "Rasp"]
-SRS = [4200, 4200, 23800]
+SRS = [1750, 1750, 23800]
 YS = [[], [], []]
 FREQS = [[], [], []]
 
@@ -83,7 +83,7 @@ def remove_hum(data):
 
 
 def max_freq(frequencies, sampling_rate):
-    return int(np.argmax(frequencies)/(1000/sampling_rate))
+    return int(np.argmax(frequencies)*sampling_rate)
 
 
 def is_same_freq(freq_1, freq_2, th=20):
@@ -109,7 +109,7 @@ def on_message(client, userdata, msg):
 
     payload = 0
 
-    if(msg.topic == "RASP"):
+    if (msg.topic == "RASP"):
         payload = int(msg.payload.decode("utf-8"))
     else:
         payload = int.from_bytes(msg.payload, byteorder="little")
@@ -120,12 +120,17 @@ def on_message(client, userdata, msg):
 
     is_rasp = msg.topic == "RASP"
 
-    payload &= 0x3FF
+    mic_data = 0
+    time_taken = 0
+
+    if (finished_flag):
+        time_taken = payload & 0x7FFF
+    else:
+        mic_data = payload & 0x3FF
 
     CURRENT_MIC = 2 if is_rasp else (0 if is_mic_1 else 1)
     y = YS[CURRENT_MIC]
     freqs = FREQS[CURRENT_MIC]
-    sample_rate = SRS[CURRENT_MIC]
     name = NAMES[CURRENT_MIC]
 
     if finished_flag:
@@ -134,15 +139,17 @@ def on_message(client, userdata, msg):
 
         frequencies = get_fft(clean_data)
         # graph_fft(frequencies)
+        sample_rate = len(y)/time_taken
         freq = max_freq(frequencies, sample_rate)
 
         if (freq > 0):
             freqs.append(freq)
 
-        print("{}: ".format(name), freq)
+        print("Message received from {} - Freq: {}".format(name, freq))
 
         if len(remove_outliers(freqs)) > SAMPLES_FOR_AVERAGE:
             avg = get_average(freqs)
+
             print("Average frequency {}: {}".format(name, avg))
 
             if CURRENT_MIC == 2:
@@ -173,7 +180,7 @@ def on_message(client, userdata, msg):
         y.clear()
 
     else:
-        y.append(payload)
+        y.append(mic_data)
 
 
 print("Connecting to MQTT broker")
