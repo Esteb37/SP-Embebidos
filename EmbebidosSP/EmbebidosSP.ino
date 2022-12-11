@@ -4,7 +4,7 @@
 
 #define MIC A0
 
-const char *CLIENT_NAME = "NODE_2";
+const char *CLIENT_NAME = "RASP";
 
 const uint16_t END_FLAG = 0x8000;
 

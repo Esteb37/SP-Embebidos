@@ -12,7 +12,6 @@ SAMPLES_FOR_AVERAGE = 3
 
 
 NAMES = ["Node 1", "Node 2", "Rasp"]
-SRS = [1750, 1750, 23800]
 YS = [[], [], []]
 FREQS = [[], [], []]
 
@@ -20,17 +19,17 @@ NODE_1_FREQ = 0
 NODE_2_FREQ = 0
 RASP_FREQ = 0
 
-"""
+
 MINY = 100
 MAXY = 130
 fig_signal = plt.figure()
 ax_signal = fig_signal.add_subplot(1, 1, 1)
 signal, = ax_signal.plot([], [], 'r')
-"""
 
+"""
 fig_fft = plt.figure()
 ax_fft = fig_fft.add_subplot(1, 1, 1)
-signal_fft, = ax_fft.plot([], [], 'r')
+signal_fft, = ax_fft.plot([], [], 'r')"""
 
 
 def on_connect(client, userdata, flags, rc):
@@ -140,6 +139,9 @@ def on_message(client, userdata, msg):
         frequencies = get_fft(clean_data)
         # graph_fft(frequencies)
         sample_rate = len(y)/time_taken
+
+        graph_signal(clean_data)
+
         freq = max_freq(frequencies, sample_rate)
 
         if (freq > 0):
